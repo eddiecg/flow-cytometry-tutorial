@@ -1,0 +1,269 @@
+---
+title: "Identifying populations by unsupervised clustering"
+author: "Eddie Cano Gamez"
+date: "April 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+
+# Loading libraries
+
+We start by loading some libraries for flow cytometry data analysis in R. The key library for this tutorial is "flowClsut", which contains several functions for unsupervised clustering of cytometry data.
+
+```{r, message=FALSE, warning=FALSE}
+library(lattice)
+library(flowCore)
+library(flowViz)
+library(flowDensity)
+library(flowClust)
+library(flowStats)
+library(flowWorkspace)
+library(openCyto)
+library(rafalib)
+library(ggplot2)
+```
+
+# Loading data
+
+Let's load an example file as a flowFrame in variable "fcs".
+
+```{r}
+fcs <- read.FCS("/Users/ecg/Documents/Eddie_PhD/FACS_in_R_tutorial/Data/clustering_files/D257.fcs", transformation = FALSE)
+```
+
+This file consists of fluorescence measurements for 89,850 cells across 12 different channels.
+
+```{r}
+fcs
+```
+
+Let's rename the channels using the provided antibody-fluorophore labels using the colnames() function.
+
+```{r}
+colnames(fcs) <- c("FSC-A","FSC-H","FSC-W","SSC-A","SSC-H","SSC-W","CD127-FITC","CD25-PE","CD4-APC","CD45RA-BV785","CD3","Time")
+```
+
+Note how the names have been properly changed.
+
+```{r}
+fcs
+```
+
+# Transforming the data
+
+We've seen in previous tutorials that all non-scatter parameters will need some sort of data transformation. Thus, let's apply the logicle transformation to channels 7 to 11. We do this as explained in the previous tutorial. Namely, first estimating the best parameters for each channel, then applying a biexponential transformation which uses those parameters.
+
+We estimate the parameters using estimateLogicle() as follows.
+```{r}
+transFuncts<-estimateLogicle(fcs,channels=colnames(fcs)[7:11])
+```
+
+Next, we apply the transformation and store this data as a new flowFrame object (tfcs).
+```{r}
+tfcs<-transform(fcs,transFuncts)
+```
+
+Note how the minRange and maxRange has changed for these channels:
+```{r}
+tfcs
+```
+
+# Visualising the data
+
+Suppose we want to recover a specific population based on FSC and SSC, which is often the case. Let's first create a FSC-A SSC-A scatter plot using xyplot(). We remove the smooth to make the plot more readable.
+
+```{r}
+xyplot(`FSC-A`~`SSC-A`,tfcs, smooth=FALSE)
+```
+
+Recall that you can obtain the same results using the ggplot2 package. For example, the following command creates a similar scatter plot:
+
+```{r}
+ggplot(data = data.frame(tfcs@exprs), mapping = aes(x=FSC.A, y=SSC.A)) + 
+    geom_point(size=0.1, alpha=0.1) + xlim(0,265000) + ylim(0,265000) + 
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          panel.background = element_blank(), axis.line = element_line(colour = "black"))
+```
+
+Visually, we identify at least three distinct populations. Based on this result, you might want to draw an ellipsoidal gate that recovers a particular population or use a function similar to lymphGate(). This is a reasonable approach when we are dealing only with one or two files, but becomes unfeasible accross multiple files acquired with slightly different machine settings. A more automated approach, with less intervention from the operator is desirable. In the next section we apply an algorithm for unsupervised clustering to this task.
+
+# Identifying populations by clustering
+
+Clustering is a type of machine learning method, commonly classed as a subtype of unsupervised learning. Unsupervised learning is the process of recovering patterns in the data (and particularly the process of identifying subgroups of data points) without any previous knowledge on data strucure. For example, suppose you collected data on several phenotypic measurements from cells of different tissues, but you do not know which tissue each cells belong to or even how many different tissues are represented in the data. You could use the phenotypic information collected to try and group cells based on their similarity. Then, infer how many tissues might be present based on the number of groups identified.
+
+There are multiple different methods for clustering (eg. partitioning clustering like k-means, hierarchical clustering, bayesian clustering, etc...). There are thus multiple ways of addressing this question, all of which can be valid. Here we will use a function from the flowClust package called "flowClust()". flowClust() implements a model-based clustering method. More specifically, flowClust() performs clustering based on a t-mixture model with Box-Cox transformation. What this means is that the data is transformed using the Box-Cox transformation (which reduce dispersion, something very common in flow cytometry) and fitted to a t-distribution (this is the model which underlies clustering). For more information on the details of this method, please refer to the corresponding publications:
+
+Details on the clustering method:
+https://onlinelibrary.wiley.com/doi/abs/10.1002/cyto.a.20531
+
+Release of the flowClsut package:
+https://bmcbioinformatics.biomedcentral.com/articles/10.1186/1471-2105-10-145
+
+
+Practically, simply use the flowClust() function. You will need to specify the name of your flowFrame (eg. fcs), the names of the parameters you will use for clustering (in this case FSC-A and SSC-A. Note, however, that you can use more than 2 parameters at a time.) and the number of clusters. 
+
+Identifying the appropriate number of clusters is an extensive problem on its own. There are several methods for estimating the ideal value for this parameter, and they will depend on the clustering method use and the structure of the clustered data. Here we present the method suggested by flowCore developers: analysing the Bayesian Information Criterion (BIC). BIC is used for selecting the model that best fit a given set of data. The best model will have the lowest BIC. 
+
+In this case, let's first run the clustering function for 10 different clusteirng numbers: 1, 2, 3, ..., 10. To do this, set the parameter K (number of culsters) to be equal to the vector 1:10. Let's assign the results of this step to the "res" variable (res standing for results).
+
+
+NOTE: This function might take a long time to run, since it will compute 10 different statistical models. 
+
+```{r}
+res <- flowClust(tfcs, varNames=c("FSC-A", "SSC-A"), K=1:10)
+```
+
+The results of the previous operation are stored in a list format:
+```{r}
+res
+```
+
+You can access individual elements of this list usng the double brackets (as with any other list). Let's access the first element, which contains the result from clusering with K=1. Note that each individual element is of class "flowClust"
+```{r}
+res[[1]]
+```
+
+You can access specific aspects of the clustering results using the @ operator. For example, let's find out how many clusters (K) were allowed in the first element of results.
+```{r}
+res[[1]]@K
+```
+
+You can also access the estimated BIC in that same way.
+```{r}
+res[[1]]@BIC
+```
+
+Now let's plot BIC as a function of the number of clusters (K). To do this, we use the criterion() function to extract the BIC of every element in our list. Then we use plot() to plot this as dots and lines. 
+```{r}
+plot(criterion(res, "BIC"), xlab="No, of Clusters", ylab="BIC", type="b")
+```
+
+Note that the Y axis is inverted (negative values), so that the higher a data point appears in the plot, the lowest its BIC is (which means the model was better).
+
+We see that BIC stabiliises between 6 and 7 clusters. Adding more than 7 clusters (8,9,10,...) doesn't help the model anymore. In fact, adding extra clusters can cause "overfitting", which is a major issue in machine learning. Thus, this tells us that the ideal K (number of clusters) is 7.
+
+It might be confusing that flowClust() identifies 7 as the ideal number of clusters when we, visually, identified only 3 populations. However, if you have a closer look at the scatter plot you'll notice that there are a lot of additional data points we discarded visually. For example, there is a big line of events at the very left of the plot, as well as tiny groups of points at the central top. These will surely be counted as groups by flowClust.
+
+Let's now repeat that scatter plot, highlighting each of the groups identified by flowClsut() in a different colour. We add a new parameter: level=0.8. This will exclude the top and bottom 10% members of a group and classify them as outliers. In this case I am setting it to 0.8 because the data is disperse. However, if the populations are tighter you can set it to 0.9 or even 0.95.
+
+```{r}
+plot(res[[7]], data=tfcs, level=0.8, z.cutoff=0)
+```
+
+Indeed, you can see that the left and top groups of points were identified by flowClusts as independent clusters.
+
+# Using clusters as "gates"
+
+Note that so far we have not talked about gates or gating at all. What clustering does is simply identifying groups of points which are together. This, however, has nothing to do with drawing gates or shapes in space. What we would maybe like to do next is to tarnsform this clusters into "shapes" which can be used as gates. In this case, for example, ellipsoidal gates might be useful. To do this we use the tmixFilter() function.
+
+Let's define a new, "automatic" gate. This gate will be applied to FSC-A and SSC-A and will be defined by clustering with K=7.
+
+```{r}
+gate <- tmixFilter(filterId = "automatic.gate", parameters = c("FSC-A","SSC-A"), K=7)
+```
+
+The gate has now been defined, but not that it has not been aplied to the data quite yet. To apply it we use the function filter(), specifying the name of our flowFrame and the name of the automatic gate. I am calling it "automatic" because if we were to apply this to multiple FCS files, clustering would be done separately for each file and thus we would get slightly different populations every time. However, it is not fully automatic because we have to determine that K=7 manually. So truly this is a "semiautomatic" gate. Let's apply it to our data and store the results in a variable called "clusters".
+
+NOTE: This step might take a little while to run.
+
+```{r}
+clusters <- filter(tfcs, gate)
+```
+
+Now we've recovered 7 different populations. But which of the seven are we interested in? Suppose we wanted to recover the lymphocyte population. Based on the previous plots, we see that this population is very close to the point (100000,20000) in the FSC-A vs SSC-A plot. You can verify this below:
+
+```{r}
+ggplot(data = data.frame(tfcs@exprs), mapping = aes(x=FSC.A, y=SSC.A)) + 
+    geom_point(size=0.1, alpha=0.1) + xlim(0,265000) + ylim(0,265000) + 
+    geom_vline(xintercept = 100000) + geom_hline(yintercept = 20000) +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          panel.background = element_blank(), axis.line = element_line(colour = "black"))
+```
+
+Thus, we define our "target"  location as those coordinates. However, any other point that is close to this cluster could work. It is simply an approxiamation. Let's store this "target location" in the tg variable.
+
+```{r}
+tg <- c(100000,20000)
+```
+
+Next, we use the getEstimates() function to find the "location" of each cluster. These "locations" are the coordinates of the center (or centroid) of each cluster.
+```{r}
+loc <- getEstimates(clusters)$locations
+```
+
+We now calculate the distance between the center of each cluster and our target location. This might look complicated, but it is simply using the formula for distance between two points (called Euclidean distance in mathematics).
+
+```{r}
+euc.dist <- apply(X=loc, MARGIN=1, FUN=function(d)sqrt( (d[2]-tg[2])^2 + (d[1]-tg[1])^2 ))
+```
+
+If we visualise the distance of each cluster to our target point as a bar plot, we will immediately notice that cluster5 contains the lymphocytes.
+
+```{r}
+barplot(height = euc.dist, xlab="Cluster number", ylab="Eucldidean distance to target")
+```
+
+However, we want to do this without any manual intervention, so we use the function min() to find the minimum distance and the function which() to identify which cluster this is. This will likely correspond to the lymphocyte population.
+
+```{r}
+clust.num <- which( euc.dist == min(euc.dist) )
+```
+
+We use split() to recover only this one cluster. Let's store these points (the ones inside our gate) in the "lymphocytes" variable.
+
+```{r}
+lymphocytes <- split(tfcs, clusters, population=list(cluster=clust.num))$cluster
+```
+
+To verify that we have the appropriate group of points, let's repeat the plot above using only the events inside our automatic gate.
+
+```{r}
+ggplot(data = data.frame(lymphocytes@exprs), mapping = aes(x=FSC.A, y=SSC.A)) + 
+    geom_point(size=0.1, alpha=0.1) + geom_density_2d() + xlim(0,300000) + ylim(0,300000) + 
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          panel.background = element_blank(), axis.line = element_line(colour = "black"))
+```
+
+# Wrapping everything in a function
+
+The previous process might look daunting, because it is composed of multiple steps of analysis. However, we can put everything in the previous section together and pack it into a nice function. This function will create the automatic gate, apply it to the data, recover the positions of the clusters, calculate the distance to our target, find the cluster with minimum distance and export it as a new flowFrame.
+
+```{r}
+automatic.gating <- function(fcsdat, channels, k, target, label="automatic.filter"){
+  gate <- tmixFilter(label, channels, K=k)
+  tg <- target
+  f <- filter(fcsdat, gate)
+  loc <- getEstimates(f)$locations
+  euc.dist <- apply(X=loc, MARGIN=1, FUN=function(d)sqrt( (d[2]-tg[2])^2 + (d[1]-tg[1])^2 ))
+  cluster <- which( euc.dist == min(euc.dist) )
+  gated.fcsdat <- split(fcsdat, f, population=list(cluster=cluster))
+  return(gated.fcsdat$cluster)
+}
+```
+
+Now all you need to do to perform automatic gating is running this is one line (I am not running it now):
+
+```{r, eval=FALSE}
+automatic.gating(fcsdat = tfcs, channels = c("FSC-A","SSC-A"), k = 7, target = c(100000,20000))
+```
+
+However, there are still two things you need to now beforehand:
+
+1) The number of clusters (which we determined by visualising the BIC)
+2) The target location (ie. approximately where we expect the population to be)
+
+If you had a big group of FCS files and wanted to gate the lymphocytes from all of them, you'd simly need to run this inside the fsApply function as follows (I'm not running it now):
+
+```{r, eval=FALSE}
+fsApply(facsdata, FUN=function(fcs){
+  automatic.gating(fcsdat = fcs, channels = c("FSC-A","SSC-A"), k = 7, target = target)
+  })
+```
+
+As long as your files are similar enough (which is often the case for cohort studies or samples acquired in similar machines, phenotyped for the same markers), you can use the exact same K and target for all of them

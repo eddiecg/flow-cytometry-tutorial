@@ -1,0 +1,368 @@
+---
+title: "Using flowSets to analyse groups of FCS files"
+author: "Eddie Cano Gamez"
+date: "April 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+Flow cytometry will often be performed not just in one sample, but accross a set of individuals, cells or experimental conditions. Each of these experiments generates a separate FCS file and it is not unlikely to have tens or hundreds of cytometry records that need to be analysed. Furthermore, sometimes these files share several features: if they belong to the same project they might have the same fluorescence channels, the same cell types, the same levels and even the same compensation. It is possible to exploit R's apply functions and cytometry libraries to analyse multiple FCS files at once. This not only enhances reproducibility, but also saves time when we are analysing large amounts of data (eg. data from a cohort). In this tutorial we will analyse the principles of how to manipulate multiple FCS files in R.
+
+# Loading libraries
+
+Let's start by making sure we have the requiered libraries. Let's install a new package: "cowplot". This package is an extension of "ggplot2" which we can use to display multiple ggplots at the same time.
+
+```{r, eval=FALSE}
+install.packages("cowplot")
+```
+
+Next, we load all the following libraries.
+
+```{r, message=FALSE, warning=FALSE}
+library(lattice)
+library(flowCore)
+library(flowViz)
+library(flowDensity)
+library(flowClust)
+library(flowStats)
+library(flowWorkspace)
+library(openCyto)
+library(rafalib)
+library(ggplot2)
+library(cowplot)
+```
+
+We are now ready to start.
+
+# Reading multiple FCS files into R
+
+To read multiple files into R (any type of files), we first need to locate them and sotre their names as a vector. We use the list.files() function to analyse the content of "facs_database". Note there are 9 fcs files inside.
+
+```{r}
+list.files("./Data/facs_database/")
+```
+
+Now let's save those file names into a variable "filenames". To make sure that only FCS files are included (there might sometimes be other files in the directory such as text documents or spreadsheets) the parameter pattern is set to ".fcs". This will only keep file names which contain ".fcs". We also set full.names to be TRUE. This is because we not only need the names of the files, but also their full path. Otherwise R will not be able to access them from our current location (working directory).
+
+```{r}
+filenames <- list.files("./Data/facs_database/", pattern=".fcs",full.names = TRUE)
+```
+
+Have a look at the content of "filenames":
+```{r}
+filenames
+```
+
+Next, let's apply the "read.flowSet()" function to those file names. This function works similarly to "read.FCS()", only it is capable of reading a list of files and not only one. Note that we are setting the transformation parameter to FALSE, so we can later apply transformations to the data ourselves.
+
+```{r}
+fcsdata <- read.flowSet(filenames, transformation=FALSE)
+```
+
+# The flowSet object
+
+Let's look at the content of fcsdata:
+
+```{r}
+fcsdata
+```
+
+And now let's check which class and mode it belongs to:
+
+```{r}
+class(fcsdata)
+mode(fcsdata)
+```
+
+This tells us that fcsdata contains is a "flowSet" object which contains 9 experiments. A "flowSet" (just as a flowFrame) has mode S4. This tells us that flowSets and flowFrames are actually very similar. In fact, one can verify that a flowSet is a list of flowFrames. Let's apply the function "class()" to all the elements in the flowSet.
+
+```{r}
+fsApply(x=fcsdata, FUN=class)
+```
+
+They are all flowFrames.
+
+Note that I used the "fsApply()" function. This function is part of the flowCore package and is very similar to any other function of the apply family (such as sapply, lapply or vapply). Only this particular one has been designed to work specifically on flowSet objects.
+
+To acces one of the flowFrames (individual FCS files) in the flowSet, simply access it as you would access an element of a list, using the double brackets.
+
+```{r}
+fcsdata[[1]]
+```
+
+This tells us that the flowFrame number 1 consists of 192,444 cells and 12 observable channels. Each channel in turn has its name and label.
+
+One might want to access the name of each individual flowFrame in the flowSet. To do this, simply access the desired flowFrame (as shown above), look at its description and locate the field called "$FIL".
+
+For example, to access the name of the first FCS file:
+```{r}
+fcsdata[[1]]@description$`$FIL`
+```
+
+We can recover the name of every FCS file combining this command with fsApply() as follows:
+```{r}
+fsApply(x=fcsdata, FUN=function(fcs){fcs@description$`$FIL`})
+```
+
+You might also want to access the channel names of each flowFrame. To do this we can use a similar function to the one above:
+```{r}
+fsApply(x=fcsdata, FUN=names)
+```
+
+Note that all of the flowFrames have the exact same channels and the exact same channel names. This is not a coincidence, in fact it is a requirement: if you try to load two FCS files containing different channels using read.flowSet() R will output an ERROR message. In conclusion, you can only have flowFrames with the same fluorescence channels in a single flowSet object.
+
+Because all the flowFrames have the same paramter names, we can simply apply colnames() to the entire flowSet object:
+
+```{r}
+colnames(fcsdata)
+```
+
+This is a much easier way of recovering the channel names of our experiments.
+
+In fact, the channel names of all files can be modified at once using just one line of code. Let's do this. First, let's store the names of our antibodies and fluorophores as a character vector.
+
+```{r}
+parameter.names <- c("FSC-A","FSC-H","FSC-W","SSC-A","SSC-H","SSC-W","CD127-FITC","CD4-APC","CD45RA-BV785","DAPI","CD25-PE","Time")
+```
+
+Have a look at the content of such vector.
+
+```{r}
+parameter.names
+```
+
+Now let's assign these new names to the channels of our flowSet.
+
+```{r}
+colnames(fcsdata) <- parameter.names
+```
+
+You can verify the names have indeed changed:
+```{r}
+colnames(fcsdata)
+```
+
+# Visualising data from a flowSet
+
+Say we want to generate scatter plots of FSC and SSC as we've done before. Only now we want to do this for all the 9 files. To do this, simply combine any plotting function (eg. xyplot) with fsApply(). For example, let's generate scatter plots of FSC-A and SSC-A for all 9 files.
+
+```{r, message=FALSE, warning=FALSE}
+fsApply(x=fcsdata, FUN=function(fcs){
+  xyplot(`FSC-A`~`SSC-A`,fcs, smooth=FALSE)
+  })
+```
+
+It is also possible to use other, more flexible visualisation functions in R. For example, let's use the ggplot2 syntax to generate the same set of plots. The following chunk of code uses fsApply() generate 9 ggplots (FSC-A vs SSC-A). It first converts the fluorescence data (@exprs) to a data.frame object, then it creates scatter and contour plots using that data and overlays them. Note the second to last line ("ggtitle(fcs@description$`$FIL`)"): this is adding a title to each of the plots, this title being the name of the file that plot belongs to (as explained above). 
+
+Because we are storing the results in the "plots" variable, this function will not print the plots yet.
+
+```{r}
+plots <- fsApply(fcsdata,FUN=function(fcs){
+  g <- ggplot(data = data.frame(fcs@exprs), mapping = aes(x=FSC.A, y=SSC.A)) + 
+    geom_point(size=0.1, alpha=0.1) + geom_density_2d() +  xlim(-1000,280000) + ylim(-1000,280000) +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          panel.background = element_blank(), axis.line = element_line(colour = "black"))  +
+    ggtitle(fcs@description$`$FIL`)
+  return(g)
+})
+```
+
+Now let's use the "plot_grid()" function (from the cowplots package) to print all of the above plots together. The ncol and nrow parameters allow us to divide the screen using a grid. In this case, we divide the screen in 9 squares (3 columns and 3 rows). Each of the 9 plots will appear in one of these squares.
+
+IMPORTANT NOTE: This function can take a several minutes to run and the result can also take a while to appear on the screen. This is beacause it is printing hundreds of thousands of points 9 times.
+
+```{r, message=FALSE, warning=FALSE}
+plot_grid(plotlist = plots, ncol = 3, nrow = 3)
+```
+
+Now let's use the same syntax to visualise other channels. For example, let's use fsApply() and ggplot to create histograms of CD4-APC.
+
+```{r}
+histograms <- fsApply(fcsdata,FUN=function(fcs){
+  g <- ggplot(data = data.frame(fcs@exprs), mapping = aes(x=CD4.APC)) + 
+    geom_histogram() + ggtitle(fcs@description$`$FIL`) +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          panel.background = element_blank(), axis.line = element_line(colour = "black"))
+  return(g)
+})
+```
+
+Again, we use plot_grid() to visualise all histograms together.
+
+```{r, message=FALSE, warning=FALSE}
+plot_grid(plotlist = histograms, ncol = 3, nrow = 3)
+```
+
+Note the wat the data clusters towards the left side of the histograms. What this tells us is that CD4-APC channel needs some sort of transformation. In fact, all non-scatter channels should be transformed. 
+
+# Applying data transformations to a flowSet
+
+Let's apply the logicle transform to our cytometry data. Remember that the logicle transform is a special case of biexponential transformation in which the parameters are inferred for each of the channels separately. First, let's have a look at one of the FCS files in fcsdata:
+
+```{r}
+fcsdata[[2]]
+```
+
+The first six channels (FSCs and SSCs) do not need any transformation, while all other channels do. 
+
+Let's build a function that does the following:
+
+1. Take an FCS file (flowFrame) and estimate the best biexponential paramteres for each of its channels. But only do this from channels 7 onwards.
+2. Transform the fluorescence data using the estimated parameters
+
+We'll call this function "LogiTrans".
+
+```{r}
+LogiTrans <- function(fcs){
+  transFuncts<-estimateLogicle(fcs,channels=colnames(fcs)[7:length(colnames(fcs))])
+  tfcsdat<-transform(fcs,transFuncts)
+}
+```
+
+Now we can use fsApply() to apply LogiTrans to the 9 flowFrames in our flowSet. Let's assign the results of this in a new flowSet object called "tfcsdata" (Transformed FACS data).
+
+```{r}
+tfcsdata <- fsApply(x=fcsdata, FUN=LogiTrans)
+```
+
+Now let's repeat the exact same operation we did above to create CD4-APC histograms for all the flowFrames in tfcsdata.
+
+```{r}
+histograms <- fsApply(tfcsdata,FUN=function(fcs){
+  g <- ggplot(data = data.frame(fcs@exprs), mapping = aes(x=CD4.APC)) + 
+    geom_histogram() + ggtitle(fcs@description$`$FIL`) +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          panel.background = element_blank(), axis.line = element_line(colour = "black"))
+  return(g)
+})
+```
+
+We can use plot_grid() to visualise them together.
+
+```{r, message=FALSE, warning=FALSE}
+plot_grid(plotlist = histograms, ncol = 3, nrow = 3)
+```
+
+Notice how now the values for CD4-APC range only from 0 to 5. Now we can clearly spot two populations.  
+
+The package "ncdfFlow" also provides alternative plotting functions specifically designed for flowSets. For example, "densityplot()" generates density plots (smoothened histograms) for a given parameter accross all samples of a flowSet. This function computes much faster than any of the previous approches.
+
+Let's use densityplot() to generate histograms of CD4-APC of all our files.
+
+To do this, simply use densityplot() and specify the following:
+
+1) A formula with the following strucutre: ~ `channel of interest`
+2) The name of your flowSet object (eg. tfcsdata)
+3) The name of the channel you want to plot
+
+```{r}
+densityplot(~`CD4-APC`,data=tfcsdata, channel="CD4-APC")
+```
+
+
+# Applying manual gates to a flowSet
+
+Often you'll want to manually apply a gate and make sure it is the exact same in all FCS files. This can be done using the fsApply() function too. For example, let's gate the singlets in our data set. 
+
+First, let's create scatter plots of FSC-H vs FSC-W. I've added several lines to these plots indicating my estimates of the limits of a rectangular gate. The blue colour represents the lower limit and the red colour the upper one.
+
+```{r}
+plots <- fsApply(tfcsdata, FUN=function(fcs){
+  g <- ggplot(data = data.frame(fcs@exprs), mapping = aes(x=FSC.H, y=FSC.W)) + xlim(0,300000) + ylim(50000,200000) +
+  geom_point(size=0.1, alpha=0.1) + geom_density_2d() + xlab("FSC-H") + ylab("FSC-W") + ggtitle(fcs@description$`$FIL`) +
+  geom_vline(xintercept = 0, color="blue") + geom_vline(xintercept = 200000, color="red") + 
+  geom_hline(yintercept = 70000, color="blue") + geom_hline(yintercept = 90000, color="red") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black")) 
+  return(g)
+})
+
+```
+
+```{r, message=FALSE, warning=FALSE}
+plot_grid(plotlist = plots, ncol = 3, nrow = 3)
+```
+
+The majority of single events (in all files) seem to fall inside this rectangle. Thus, I use the "rectangleGate()" function to define a rectangular gate in the same way we did before for flowFrames.
+
+```{r}
+singletsGate <- rectangleGate(filterId = "Singlets", "FSC-H"=c(0,200000), "FSC-W"=c(70000,90000))
+```
+
+Next, we use fsApply() to apply the same rectangular gate to all the flowFrames inside our flowSet. The results are stored in a new variable called "singlets".
+
+```{r}
+singlets <- fsApply(x=tfcsdata, FUN=function(fcs){
+  Subset(fcs,singletsGate)
+  })
+```
+
+To verify if gating worked, let's create the same plots again, only now using the singlets data.
+
+```{r}
+plots <- fsApply(singlets, FUN=function(fcs){
+  g <- ggplot(data = data.frame(fcs@exprs), mapping = aes(x=FSC.H, y=FSC.W)) + xlim(0,300000) + ylim(50000,200000) +
+  geom_point(size=0.1, alpha=0.1) + geom_density_2d() + xlab("FSC-H") + ylab("FSC-W") + ggtitle(fcs@description$`$FIL`) +
+  geom_vline(xintercept = 0, color="blue") + geom_vline(xintercept = 200000, color="red") + 
+  geom_hline(yintercept = 70000, color="blue") + geom_hline(yintercept = 90000, color="red") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black")) 
+  return(g)
+})
+```
+
+```{r, message=FALSE, warning=FALSE}
+plot_grid(plotlist = plots, ncol = 3, nrow = 3)
+```
+
+Indeed, all events falling outside this gate have been filtered out.
+
+# Using normalisations to regress techincal variability
+
+We've learn how to apply a fixed gate to multiple samples, however sometimes the limits of a gate will need to be adjusted for each sample in our study. For example, let's look at the CD45RA-BV785 measurements for the single events we filtered in the previous section.
+
+```{r}
+densityplot(~`CD45RA-BV785`,data=singlets, channel="CD45RA-BV785")
+```
+
+Based on samples D065 to D069, if one wanted to recover the CD45RA+ events one would set a gate from approximately 2.5 to 4. However, the fluorescence measurements for samples D071 to D074 are generally a little bit more spread. Thus, if we applied this gate to them, we'd be selecting some CD45RA- events too. 
+
+Often in flow cytometry two samples assayed for the same marker will have the similar distributions, but slightly skewed relative to each other. The reason for this is usually technical, since sometimes samples are acquired on different days (which implies that the laser settings of the cytometry, the subtleties of the experimental protocol or even the temperature of the room might be different) or even on different machines. Here for example, there were two batches of samples processed in different days. In these cases, we'll want to take into account such techincal effects and adjust the gate accordingly. (Note, however, that correcting for these effects is not always a good idea and this will depend on the judgment on whoever analyses the data).
+
+There are at least three ways to do that:
+
+1) Applying a different manual gate to each file. This can be done by running a separate gating function for each flowFrame in our flowSet object, however it is time consuming and does not exploit the full potential of R as a programming language designed for data analysis.
+
+2) Normalising the measurements for the channel of interest before applying the gate. This means, regressing for the technical variation so that distributions for that channels across all samples are aligned. We explore this possibility below.
+
+3) Performing unsupervised learning approaches adapted from machine learning, such as clustering, to set gates "automatically". Using these methods, it is possible to identify groups of events that are close to each other. This will be the topic of another tutorial.
+
+Let's focus on approach number two. Normalising a data set means brining eveything to the same scale or range. In this case, we want the fluorescence for channel X in all our samples to be in the same scale and range. There are several ways of doing this. The package "flowStats" contains several useful functions for data normalisation such as "warpSet()". warpSet() uses "warping" functinos to estimate where the largest density of data is. In other words, it identifies where the peaks of our histograms are. Next, it alligns these data dense areas in all our samples by modifying its spread and its mean. Visually, you can imagine this as shifting a histogram from left to right and making it narrower or wider so as to align it with the rest of the histograms. Note however that the shape of the histogram (eg. if it is bimodal or trimodal) will not change. This is the entire point of normalising: changing the scale and the range without changing the actual shape of the distribution.
+
+Let's use warpSet() to normalise CD45RA-BV785 accross all our samples. To do this, simply specify the name of your flowSet object and the channel you want to normalise. Let's store the normalised flowSet in a new variable called "norm_singlets".
+
+```{r}
+norm_singlets <- warpSet(singlets, stains="CD45RA-BV785")
+```
+
+Now let's plot CD45RA-BV785 again.
+
+```{r}
+densityplot(~`CD45RA-BV785`,data=norm_singlets, channel="CD45RA-BV785")
+```
+
+Compare this plot with the previous one. You'll notice that the histograms have changed slightly. In fact, they are now perfectly aligned. If we wanted to recover the CD45RA+ population, we would be fine setting a gate from 2.6 to 3.8. To appreciate this better, let's plot both sets of histograms together (normalised histograms below and non-normalised histograms above).
+
+```{r}
+plot1 <- densityplot(~`CD45RA-BV785`,data=singlets, channel="CD45RA-BV785")
+plot2 <- densityplot(~`CD45RA-BV785`,data=norm_singlets, channel="CD45RA-BV785")
+plot(plot1, split=c(1,1,1,2))
+plot(plot2, split=c(1,2,1,2), newpage=FALSE)
+```
+
+This can be repeated for as many channels and samples as necessary.

@@ -1,0 +1,627 @@
+---
+title: "Introduction to R"
+author: "Eddie Cano-Gámez"
+date: "April 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+R is a programming language designed to read, write and manipulate data, especially suitable for performing statistical tests and modelling. Data in R is stored in the form of objects which belong to several data types. This script illustrates the most important data types in R and how the methods associated to each of them.
+
+# Data types in R
+
+## A) Numeric and character variables
+
+The simplest data types are those which consist of a single element. This element can be a number, a string of text or a logical value, among others. There are two ways of assigning values to a variable in R. 
+
+1. The '<-' operator assigns the value on the right to the variable on the left (hence the pointing arrow, which explicitly shows the direction of assignation). For example:
+
+```{r}
+a <- 2.3
+a
+```
+
+2. Th more common "=" operator also asigns values to variables. For example:
+
+```{r}
+a = 2.3
+a
+```
+
+The first method is preferable, since it reminds us that assignation is different to the mathematic equality (denoted in R as "==").
+
+All variables belong to a "class". The most important classes when dealing with one-dimensional are:
+
+Numeric = Floating numbers 
+Integers
+Character = Text (ASCII)
+Logical = Boolean values (FALSE/TRUE)
+
+For example, the following variables have a different class even though they store the same number:
+```{r }
+a <- 2.3
+b <- as.integer(2.3)
+c <- "2.3"
+```
+
+Thus, the data stored inside them (and the methods that can be applied to them) is different.
+```{r}
+a
+b
+c
+```
+
+Note that b = 2. This is because it was defined as an integer variable, which automatically ignores all decimal positions. Furthermore c = "2". Here, the quotes indicate that we are dealing with a character object (text) and not with a number.
+
+A logical variable can be defined as follows:
+```{r}
+d <- FALSE
+```
+
+
+The class of an object can be accessed through the function "class()" as follows:
+```{r}
+class(a)
+class(b)
+class(c)
+class(d)
+```
+
+Objects in R also have a mode: 
+```{r}
+mode(a)
+mode(b)
+mode(c)
+mode(d)
+```
+
+One-dimensional objects often have a mode that is equal to their class (as above). However, as we will later see, this is not the case for objects of higher dimensions.
+
+## B) Vectors
+
+It is extremely uncommon that one-dimensional (scalar) values be the centre of an R session. Usually, we'll want to manipulate larger groups of data. To do this we use n-dimensional objects such as vectors, lists, matrices and data frames.
+
+A series of values can be stored in a single variable in the form of a vector. The easiest way to define a vector in R is using the "c()" operator ("c" stands for create or concatenate) as follows:
+
+```{r}
+vec <- c(2,4,5,9,13)
+```
+
+Since all of the members of our vector are numbers, the class of this vector is numeric:
+
+```{r}
+vec
+class(vec)
+```
+
+Vectors also have an atribute called "length" (number of elements in the vector) which can be accessed with the length() operator:
+
+```{r}
+length(vec)
+```
+
+To retrieve specific elements from a vector, we can use the [] operator. Inside the brackets we should include the index (position) of the element we want to access. R always indexes its objects with base 1 (as opposed to base 0), which means that the first element with have index 1, the second index 2, and so forth. 
+
+To access the second element of our vector, we do the following:
+```{r}
+vec[2]
+```
+
+If we want to create a vector of consecutive numbers (a sequence) without typing each of them, we can use the colon ":" operator, as follows:
+```{r}
+1:5
+```
+
+The same result can be achieved using the seq() function. When using seq() we need to specify the starting and ending point of the sequence:
+```{r}
+seq(1,10)
+```
+
+It is possible to add a third argument to the seq() function, which specifies the interval/increment size of the sequence. For example, the following function generates a sequence of numbers from 1 to 10 in increments of 2:
+```{r}
+seq(1,10,2)
+```
+
+Vectors can also store character variables. For example, we can define a vector which contains animal names:
+```{r}
+vec2 <- c(A="dog",B="cat",C="rabbit")
+vec2
+```
+
+The class of this vector will be "character":
+```{r}
+class(vec2)
+```
+
+Note that when I defined the vector I assigned a name to each of its elements (in this case A, B, and C). The name of a vector's elements can be accessed using the names() function:
+```{r}
+names(vec2)
+```
+
+A named element in a vector can be accessed directly by its name:
+```{r}
+vec2["C"]
+```
+
+Names can also be assigned after the vector has been created. For example, let's have a look at our first vector. This vector does not contain any names:
+```{r}
+vec
+names(vec)
+```
+
+We can assign names to it using the names() function and the '<-' operator as follows:
+```{r}
+names(vec) <- c("one","two","three","four","five")
+```
+
+Now each element of vec is indexed by a name:
+```{r}
+vec
+vec["two"]
+```
+
+Sometimes we will need to create vectors in which a series of numbers is repeated over and over again. This can be easily done using the rep() function ("rep" standing for replicate). For example, the following function will create a vector that contains the values 1 and 2, repeated 5 times:
+
+```{r}
+rep(c(1,2),5)
+```
+
+
+rep() can also be used to replicate the content of a vector. For example, the following line creates a vector containing three copies o the content of vec:
+
+```{r}
+rep(vec,3)
+```
+
+
+### Vectors of factors
+
+A very common situation is that in which we have a list of elements, each belonging to a different group. For instance, we might be dealing with data from an experiment in which we have "control samples" and "treatment samples". When dealing with this type of labels, we use a data type called factor.
+
+To define a factor in R, simply use the "factor()" function. The following example creates a vector containing the "control" and "treatment" labels repeated 3 times and then converts that to a factor:
+
+```{r}
+fac <- factor(rep(c("control","treatment"),3))
+fac
+```
+
+Note that now fac doesn't only contain the series of labels, but also "levels". This reflects the fact that fac is actually not a vector of characters. Let's verify the class and mode o the vector:
+
+```{r}
+class(fac)
+mode(fac)
+```
+
+A vector of factors always has a mode "numeric". This means that the data is not stored in the form of text ("Control" and "Treatment") but rather in the form of numbers (1, 2). This can be easily verified using the "as.numeric()"" function:
+
+```{r}
+as.numeric(fac)
+```
+
+However, if you are interested in the labels of a factor's levels, you can still access them usig the "as.character()" function:
+```{r}
+as.character(fac)
+```
+
+More generally, the levels of a factor can be accessed using the "levels()" function:
+```{r}
+levels(fac)
+```
+
+## C) Lists
+
+Often we will need to store elements of different classes into a single variable. For instance, imagine you want to store numbers and text in the same variable. You can try to assign them to a vector as follows:
+
+```{r}
+vec3 <- c(1,3,6:3,"cat","dog")
+```
+
+However, the result from this operation is not what we expected:
+```{r}
+vec3
+```
+
+The quotes indicate us that all the variables are text. In fact, one can verify that R has converted all the numbers to characters:
+```{r}
+class(vec3)
+```
+
+This is because a vector can only store values which ALL BELONG TO THE SAME CLASS. 
+
+If we want to store elements of multiple data types in a single variable, we use a "list". Lists are defined using the list() function: 
+```{r}
+mylist <- list(A=1,B=3,C=6:3,D="cat",E="dog")
+```
+
+Note how each element is stored independently and can be of a different class and have different dimentions. In this case, the element "C" is itself a vector of length  4. 
+```{r}
+mylist
+```
+
+If the list contains names, then each element can be accessed by its name using the $ sign:
+```{r}
+mylist$D
+```
+
+This is the same as accessing the element using its index:
+```{r}
+mylist[[4]]
+```
+
+Note that for lists you have to use the double bracket operator [[]] instead of the single bracket used for vectors.
+
+Each of the objects in a list can have different classes and modes:
+```{r}
+class(mylist$A)
+class(mylist$C)
+class(mylist$D)
+```
+
+# D) Matrices
+
+Sometimes even vectors and lists will not be convenient for storing data. This is the case when one deals with multidimensional data: tables, matrices or collections of vectors. To manipulate these data structures we can use matrices and data frames.
+
+A matrix object consists of "n" rows and "m" columns. To create a matrix in R simply use the "matrix()" function and specify the data you want to fill the matrix with. For example, this line creates a sequence of numbers from 1 to 10 and stores them in a matrix format:
+```{r}
+matrix(1:10)
+```
+
+Note that by default matrix() assumes that you only want one column. If you need the data to be stored in multiple columns, simply specify the number of rows and columns you need:
+```{r}
+matrix(1:10,nrow=5,ncol=2)
+```
+
+Importantly, R always assumes you want to arrange the data in a matrix "by column". This means, starting from the top left and going down the first column, then the second one, and so forth. If you need the data to be allocated row by row, simply set the byrow argument to TRUE.
+```{r}
+matrix(1:100,nrow=10,ncol=10,byrow=TRUE)
+```
+
+Just as vectors have names, the columns and rows of a matrix can also be labelled. These labels can be specified using the "dimnames" argument. dimnames has to be a list with two elements, the name of rows and the name of columns. 
+
+Let's craete a 100 x 5 matrix containing random numbers from a normal distribution. We generate 500 such numbers using the "rnorm()" function. We name the rows of the matrix with numbers and the columns with letters.
+```{r}
+mat <- matrix(rnorm(500),nrow=100,ncol=5, 
+       dimnames=list(1:100,c("A","B","C","D","E")))
+```
+
+The funciton "head()" displays the top elements of the matrix
+```{r}
+head(mat)
+```
+
+The function "tail()" displays the bottom elements
+```{r}
+tail(mat)
+```
+
+You can use "colnames()" and "rownames()" to access the row and column names of a matrix:
+```{r}
+colnames(mat)
+rownames(mat)
+```
+
+Finally, it is possible to access specific elements in a matrix using either their names or their indexes. Note that both indexes (the column and row number) need to be specified.
+```{r}
+mat[1,4]
+mat[1,"D"]
+```
+
+If the column number is left empty, then R retrieves all the elements in that row (and vice versa).
+```{r}
+mat[1,]
+```
+
+For instances, the following line retrieves all elements in the column labelled "D" and calculates the average (mean):
+```{r}
+mean(mat[,"D"])
+```
+
+
+Matrices are very useful data types, since they allow the user to perform operations to each of its rows or columns. For example, we can take column D and create a histogram of values using the "hist()" function:
+```{r}
+hist(mat[,"D"], main="Histogram of column D", xlab="Value", breaks=30)
+```
+
+Another way of building matrices is by concatenating multiple vectors. The vectors in question have to be of the same length. Let's create two different vectors with length 10 each:
+```{r}
+A <- seq(1:10)
+B <- seq(11:20)
+```
+
+Now let's combine them. We can do this using the "cbind()" function (cbind standing for "column binding").
+```{r}
+cbind(A,B)
+```
+
+One can verify that this new object is a matrix
+```{r}
+class(cbind(A,B))
+```
+
+The columns of this matrix are named after the names of each individual vector
+```{r}
+colnames(cbind(A,B))
+```
+
+Vectors can also be used as two rows of a matrix, insted of two columns. To do this, we use rbind(), which stands for "row binding".
+
+```{r}
+rbind(A,B)
+```
+
+# E) Data frames
+
+As with vectors, often we will need to store elements of different classes into a single matrix. For instance, imagine you want to store a list of names along with an identifier for each name. Let's try to store this data as a matrix:
+
+First we generate a vector of IDs, then a vector of names:
+```{r}
+ID <- 1:6
+Name <- c("Jimmy","Amanda","Glenn","Toby","Ren","Amanda")
+```
+
+Finally, we bind both columns:
+```{r}
+names <- cbind(ID,Name)
+```
+
+Note that everything has been transformed to a character form (hence the quotes):
+```{r}
+names
+```
+
+In fact, it has a "character" class:
+```{r}
+class(names)
+class(names[,1])
+class(names[,2])
+```
+
+This is because, just as a vector, a matrix can only store values which ALL BELONG TO THE SAME CLASS. 
+
+To store objets of several different classes in a single object, we need to build a data frame. To create a data frame in R simply use the "data.frame()" function as follows:
+
+```{r}
+names <- data.frame(ID,Name)
+names
+```
+
+Note how now each column belongs to a different class:
+```{r}
+class(names$ID)
+class(names$Name)
+```
+
+However, the names have been stored as factors instead of characters. This is because R always assumes character variables in a data.frame are factors. To keep them as characters instead, simply set the stringsAsFactors paramteres to FALSE:
+```{r}
+names <- data.frame(ID,Name, stringsAsFactors=FALSE)
+```
+
+Now we have a numeric and a character column:
+```{r}
+class(names$ID)
+class(names$Name)
+```
+
+Data frames are useful because it is easy to perform operations on each row or column individually. For example, we can now use "table()" to tabulate the names and find out if any of them is repeated more than once.
+```{r}
+table(names$Name)
+```
+
+# Operating on R data types
+
+As a programming language, are has been designed to optimally work with vectors, lists, matrices and data frames. Thus, as will be illustrated in the following examples, if we want to sequentially access different elements of a matrix or data frame R provides a special family of functions to do this. 
+
+Let's create a data frame containing the name of 6 individuals as well as their height, body mass index (BMI), age and hours of sleep. Since we do not have access to such dataset, we simulate it using random number generators.
+
+We first define a vector of names:
+```{r}
+names <- c("Jimmy","Amanda","Glenn","Toby","Ren","Amanda")
+```
+
+Next, we generate 6 random numbers that represent height in centimetres. To do this we use rnorm() to generate random numbers with mean 165 cm and sd 10cm
+```{r}
+heights <- rnorm(6,mean=165,sd=10)
+```
+
+We repeat this process for BMI and sleep hours, and then manually create a vector of ages:
+```{r}
+BMIs <- rnorm(6,mean=27,sd=2)
+age <- c(21,23,23,40,19,35)
+sleep <- rnorm(6,mean=7,sd=2)
+```
+
+Finally, we concatenate everything into a data.frame object:
+```{r}
+dat <- data.frame(names,heights,BMIs,age,sleep)
+dat
+```
+
+Using the function "dim()" we verify the dimensions of this data set
+```{r}
+dim(dat)
+```
+
+Let's now look closer into a family of functions called "apply". These functions are designed to repeat an operation across all elements of a data frame, matrix, list or vector without the need of specifying for cycles or loops.
+
+In order to use apply(), we specify the following:
+
+A) X = matrix or data frame where our data is stored
+B) MARGIN = whether we want the operation to be repeated per row (1) or per column (2)
+C) FUN= operation we want to perform
+
+In this case, we want to retrieve the class of each of the columns in the data frame "dat":
+```{r}
+apply(X=dat, MARGIN=2, FUN=class)
+```
+
+We can use the exact same strucutre to tabulate the values in each column using "table()":
+```{r}
+apply(X=dat, MARGIN=2, FUN=table)
+```
+
+Now we combine apply() with function "Summary", which takes a group of numbers and summarises them in six numbers: minimum, mean, median, maximum and interquartile ranges.
+```{r}
+apply(X=dat[,2:5], MARGIN=2, FUN=summary)
+```
+
+
+Note that without the "apply" functions we would need to define a for cycle such as this one:
+```{r}
+for(i in 2:5){
+  print(summary(dat[,i]))
+}
+```
+
+This might be feasible for small datasets, but becomes complicated if nested cycles are needed. Also, it is an unnatural syntax for R.
+
+
+Data frames can themselves be grouped into list or higher-order data types. To illustrate this, let's simulate a new dataset of heights, BMIs, ages and sleep hours. Now we also include sex. Now we will simulate data from 100 individuals and will name each individual with a numeric ID instead of a name:
+```{r}
+IDs <- seq(1,100)
+heights <- rnorm(100,mean=165,sd=10)
+BMIs <- rnorm(100,mean=27,sd=2)
+ages <- round(rnorm(100,mean=25,sd=10))
+sex <- sample(x=c(0,1),size=100,replace=TRUE)
+sleep <- rnorm(100,mean=7,sd=2)
+
+dat2 <- data.frame(IDs,heights,BMIs,ages,sex,sleep)
+```
+
+Let's compare our first, smaller data set with the new data. 
+
+```{r}
+dat
+```
+
+```{r}
+head(dat2)
+```
+
+Under certain circumstances we will want to store both datasets together. For instance, if they correspond to data from two different populations or studies that we want to compare later. We can do this by creating a list of data frames:
+
+```{r}
+database <- list(A=dat,B=dat2)
+```
+
+Here, data the element A of our list is the first data set, and the element B the second:
+```{r}
+head(database$A)
+head(database$B)
+```
+
+Now we can use another function of the apply family called "lapply" to repeat an operation in all the elements of a list (in this case, the list of data frames). We can combine lapply() with apply() to calculate the summary numbers of each column o both datasets. Let's store the results in a new variable:
+```{r}
+results <- lapply(database, function(l){
+  apply(X=l[,2:dim(l)[2]], MARGIN=2, FUN=summary)
+  })
+```
+
+Note that the results variable is itself a list (since lapply generates a list output):
+```{r}
+results
+class(results)
+```
+
+# Extending R's funcitonality with libraries
+
+Sometimes the basic functions in R are not enough for the type of analysis we are interested in. In these cases, we can expand R's functionality by installing additional groups of functions called "libraries". A large proportion of R libraries are stored in the "Comprehensive R Archive Network" (CRAN) and can be installed using the "install.packages()" function followed by the name of the library. 
+
+The following line installs the libraries "rafalib" and "reshape2" from CRAN:
+```{r, eval=FALSE}
+install.packages("rafalib")
+install.packages("reshape2")
+```
+
+rafalib contains a group of functions which facilitate data exploration and visualisation, while reshape2 contains functions to change the structure of data frames (reshape them).
+
+Let's load the libraries using library().
+```{r}
+library(rafalib)
+library(reshape2)
+```
+
+Now we can use the function mypar() from "rafalib" to tell R to create a grid with 6 spaces. Then, we use apply() to plot histograms of each of the columns in our data frame data2 (element B in the "database" list"). 
+```{r}
+mypar(3,2)
+apply(X=database$B[,2:dim(database$B)[2]], MARGIN=2, FUN=hist, main="",xlab="")
+```
+
+The function melt() from reshape2 combines all the different columns of a data frame into a single columns and adds an extra column of labels. This way of restructuring the data is useful for easier visulisation or manipulation.
+```{r}
+dat
+melt(dat)
+```
+
+# Writing data from R
+
+Once we've finished manipulating data, we might want to permanently store it in a file. There are two ways of writing data from R:
+
+
+## A) Writing human readable files:
+
+We might want to write the data in a format that is human readale. This means, a format that any text editor can open and which contains ASCII characters. This can be done with the "write.table()" function. For example, we can store the data frame dat2 into a text file as follows:
+```{r, eval=FALSE}
+write.table(dat2, file="./Data/example_data.txt")
+```
+
+However, write.table() will automatically add quotes to every value in the text file. You can check this yourself opening the output file. To avoid this, simply set the argument quote to FALSE:
+```{r, eval=FALSE}
+write.table(dat2, file="./Data/example_data_noQuotes.txt", quote=FALSE)
+```
+
+By default, write.table() separates the values with spaces. Sometimes we might want to separate them using tab ("\t"). For example, genomic distances and coordinates are commonly saved as tabulated files. To do this, specify the separator character by setting sep to "\t".
+
+```{r, eval=FALSE}
+write.table(dat2, file="./Data/example_data.tab", quote=FALSE, sep="\t")
+```
+
+Finally, one of the most common data file formats is the comma separated value (csv), which can be read by any spreadsheet software (eg. Excel). To create this type of files, we can set sep="," or simply use the function "write.csv()".
+
+```{r, eval=FALSE}
+write.csv(dat2, file="./Data/example_data.csv", quote=FALSE)
+```
+
+
+## B) Writing binary files:
+
+Often we will be interested in saving objects which were difficult to generate but are too complicated to be stored in a human readable format. For instance, if we wanted to save our object "database", which is a list containing two data frames, we could not use write.table. In these cases, an alternative is to save the data as a binary file (R data file). This is easily done with the function saveRDS(). It is recommended (though not absolutely necessary) to save the files with the suffix rds.
+
+```{r, eval=FALSE}
+saveRDS(database, file="./Data/example_database.rds")
+```
+
+saveRDS() is standardised so that R will always save data objects in the same binary format regardless of computer architecture. This means that an RDS object generated in one computer can be taken to any other computer and read into R.
+
+# Reading data into R
+
+All the data types in the previous section can be read into R. This is done with the following function:
+
+To read from a csv, we use read.csv()
+```{r}
+mydata <- read.csv("./Data/example_data.csv")
+head(mydata)
+```
+
+Note that read.csv() automatically recognises the header. If this is not what you want, you can set the header arugment to FALSE. Also, read.csv() assumes there are no row names. If we want the first column (or any other column) to be used as row names, we just need to set row.names to be the column number. In this case, row.names = 1 will use the IDs as row names:
+
+```{r}
+mydata <- read.csv("./Data/example_data.csv", row.names = 1)
+head(mydata)
+```
+
+To read from a space or tab separated files, we use read.table() as follows:
+```{r}
+mydata <- read.table("./Data/example_data.tab", row.names = 1)
+head(mydata)
+```
+
+Finally, we can read a binary (R data) file using readRDS(). Note that the list has exactly the same structure as it had before, and that you can easily access both of the data frames stored in it.
+```{r}
+mydatabase <- readRDS("./Data/example_database.rds")
+lapply(mydatabase,head)
+```

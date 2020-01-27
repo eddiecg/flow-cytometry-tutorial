@@ -1,0 +1,409 @@
+---
+title: "Introduction to cytometry data in R"
+author: "Eddie Cano Gamez"
+date: "April 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+Flow cytometry generates quantitative data which encompases thousand of fluorescence mesaurements accross multiple wavelengths. This information can be imported into R and manipulated as an R objet using a variety of external libraries specifically designed for this task. The most important package for flow cytometry data analysis in R is "flowCore". This package was developed by biostatistician Florian Hahne and is available in Bioconductor. 
+
+For a detailed documentation of flowCore please refer to:
+
+https://www.bioconductor.org/packages/3.7/bioc/vignettes/flowCore/inst/doc/HowTo-flowCore.pdf
+
+
+
+For reading the original publication, refer to:
+
+https://bmcbioinformatics.biomedcentral.com/articles/10.1186/1471-2105-10-106
+
+
+Other libraries have since been developed as extentions to flowCore. 
+
+The purpose of this tutorial is to describe the basics of flowCore, such as reading and writing cytometry data in R, the structure of flowFrame objects, and basic manipulation of cytometry data and metadata.
+
+# Installing libraries
+
+Let's start by installing flowCore and its additional libraries. We first use the source() function to tell R the URL where to find the biocLite function, as well as bioconductor packages.
+
+```{r, eval=FALSE}
+source("https://bioconductor.org/biocLite.R")
+```
+
+Next, we use biocLite() to install flowCore and other libraries for visualisation, clustering and statistical analysis of cytometry data.
+
+```{r, eval=FALSE}
+biocLite("flowCore")
+biocLite("flowViz")
+biocLite("flowDensity")
+biocLite("flowClust")
+biocLite("flowStats")
+biocLite("flowWorkspace")
+biocLite("openCyto")
+```
+
+We also need to install the "lattice" and "ggplot2" libraries which are available from CRAN via install.packages().
+
+```{r, eval=FALSE}
+install.packages("lattice")
+install.packages("ggplot2")
+```
+
+Now that everything's been installed, we proceed to load the libraries (along with some other useful libraries).
+```{r, message=FALSE, warning=FALSE}
+library(lattice)
+library(flowCore)
+library(flowViz)
+library(flowDensity)
+library(flowClust)
+library(flowStats)
+library(flowWorkspace)
+library(openCyto)
+library(rafalib)
+library(ggplot2)
+```
+
+Now we are ready to proceed.
+
+# Reading cytometry data into R
+
+Cytometry data is exported from FACS sorters and analyser as "Flow Cytometry Standard" (FCS) files. To read these files into R, we use the read.FCS() function and specify the path to our data. Let's load some example data. Note that I am setting the transformation parameter to FALSE, since we will later apply the transformation within R.
+
+```{r}
+fcs <- read.FCS("./Data/facs_file/D257_CD4_Naive.fcs", transformation = FALSE)
+```
+
+Next, let's verify which data type this variable is. We do this via the class() and mode() functions. 
+```{r}
+class(fcs)
+mode(fcs)
+```
+
+This tells us that our cytometry data (now stored in the fcs variable) belongs to a class called "flowFrame". This class was defined by the package developers using S4 (as we can see in its mode), one of four object oriented programming systems in R. 
+
+## The flowFrame object
+
+Now let's look at the content of fcs. We do this simply by typing fcs in the console. This will display a summary of the data assigned to fcs.
+
+```{r}
+fcs
+```
+
+As you can see, the majority of this object is used to store fluorescence measurements. In this case, there are 13 different parameters (which correspond to fluorescence channels). We can see the name of each variable (which corresponds to the laser and detector) as well as its description (labels added to each channel by the operator when acquiring the data). Furthermore, R has displayed for us the minimum and maximum values for each channel, as well as the range.
+
+To access the list of parameters, simply use the names() and featureNames() functions.
+```{r}
+names(fcs)
+featureNames(fcs)
+```
+
+To access the data, use the exprs() function. Note that I am only displaying here the head of the data, since it is too large to print on screen.
+```{r}
+head(exprs(fcs))
+```
+
+Another way to access the data is via the @ operator, as follows.
+```{r}
+head(fcs@exprs)
+```
+
+It is also possible to use the summary() function to obtain key metrics of the data.
+```{r}
+summary(fcs)
+```
+
+However, the flowFrame object consists of more than just fluorescence measurements.There is also a large metadata component. To access the fcs file's metadata you can use the description() function or the @ operator as follows. Note that I am not running the command, since that would print the 212 metadata fields to the screen.
+
+```{r, eval=FALSE}
+fcs@description
+description(fcs)
+```
+
+Some (though not all) of the variables stored in the FlowFrame metadata are:
+
+1) FCS file version ($FCSversion)
+2) Cytometer used ($`$CYT`)
+3) Software version used to acquire the data ($CREATOR)
+4) Experiment name ($`EXPERIMENT NAME`)
+5) Experiment date ($`$DATE`)
+6) Operating system (OS) used when acquiring the data ($`$SYS`)
+7) Laser names
+8) Laser delays
+9) Spill matrix used to compensate ($SPILL)
+10) Whether compensation has been applied or not ($`APPLY COMPENSATION`)
+11) Individual channel labels
+12) Result of CS&T beads test( $`CST SETUP STATUS`)
+13) Details on transformations used on the data
+
+To access specific metadata fields, use the @ operator and zoom into a specific variable using $. For example, let's retrieve the date this data was acquired and the cytometer details.
+```{r}
+fcs@description$`$DATE`
+fcs@description$`$CYT`
+fcs@description$CREATOR
+```
+
+Now let's display the "spills" matrix and find out if this was compensated for or not.
+```{r}
+fcs@description$SPILL
+fcs@description$`APPLY COMPENSATION`
+```
+
+We've now verified that no compensation was needed (or applied).
+
+## Visualising cytometry data
+
+Before manipulating the data in anyway, let's make sure it is in the easiest format to handle. For example, note that the parameter names are still the laser and detector labels, which is not very handy:
+
+```{r}
+fcs
+```
+
+Thus, let's set the parameter names to be the antibody and fluorophore name using the colnames() function.
+```{r}
+colnames(fcs) <- c("FSC-A","FSC-H","FSC-W","SSC-A","SSC-H","SSC-W","CD127-FITC",
+                   "CD25-PE","CD4-APC","CD45RA-BV785","EMPTY","Time")
+```
+
+Notice how now the paramter names have changed:
+```{r}
+fcs
+names(fcs)
+```
+
+To access a specific parameter, simply use the $ operator directly, as follows:
+```{r}
+fcs$`FSC-A`
+```
+
+Now we can start exploring the data. There are several functions for easily plotting cytometry data in R contained in the flowViz and lattice libraries. For example, densityplot() is useful for visualising one parameter at a time in the form of a histogram. Let's generate histograms of FCS-A and SSC-A. To do this, use densityplot() and specify:
+
+A) The formula you want to plot (~ followed by the paramter of interest)
+B) The name of your flowFrame variable
+
+```{r}
+densityplot(~`FSC-A`, fcs)
+densityplot(~`SSC-A`, fcs)
+```
+
+You can also include multiple histograms in a single figure by adding their parameter names in the equation formula (~ paramter1 + paramter2). For example:
+
+```{r}
+densityplot(~`FSC-A` + `SSC-A`, fcs)
+```
+
+You can modify the colors of the histogram line and filling in the same way you'd modify any other R plot. For example:
+```{r}
+densityplot(~`FSC-A`, fcs, fill="blue")
+```
+
+Or:
+```{r}
+densityplot(~`FSC-A`, fcs, col="black", fill=NA)
+```
+
+
+To plot two variables together as a scatter plot, use the xyplot() function. To do so, you'll need to specify:
+
+A) A formula, where you specify which is the independent (x) and which the dependent variable (y) as follows: IndependentVariable ~ DependentVariable
+B) The name of your flowFrame object
+
+Let's create a scatter plot of FSC-A and SSC-A:
+```{r}
+xyplot(`FSC-A`~`SSC-A`, fcs)
+```
+
+R will automatically "smoothen" the distribution and present it as a blurred cloud of data. If you want to disable this funcion and create a plot colour coded by density, more similar to those in FlowJo, simply set smooth to FALSE.
+```{r}
+xyplot(`FSC-A`~`SSC-A`, fcs,smooth=FALSE)
+```
+
+You can also modify the range of both the Y and the X axis. For example, let's set specific limits to them so as to generate a plot similar to the FlowJo output:
+
+```{r}
+xyplot(`FSC-A`~`SSC-A`, fcs,smooth=FALSE, xlim=c(-1000,100000),ylim=c(-1000,300000))
+```
+
+
+As useful as they can be, the previous functions usually take a long time to compute, especially when called on multiple FCS files at a time. This is partly because they need to access sepcific fields of the flowFrame object, which is already a complicated data type. In order to reduce computation time and make other R operations possible, we can extract the fluorescence data from the flowFrame and store it as a separate variable such as a data frame.
+
+Let's store the fluorescence data in fcs into a new data frame object:
+```{r}
+fluorescence <- data.frame(fcs@exprs)
+```
+
+Note that the data is the same, but belongs to a different class and mode. The column names have also changed slightly.
+```{r}
+head(fluorescence)
+class(fluorescence)
+mode(fluorescence)
+```
+
+All measurements across all paramters have been stored as numeric variables:
+```{r}
+apply(X=fluorescence, MARGIN=2, class)
+```
+
+Now we can use the regular hist() function in base R to generate histograms of FCS-A and SSC-A which compute much faster.
+```{r}
+mypar(2,1)
+hist(fluorescence$FSC.A, breaks=50, col="grey", main="FSC-A", xlab="FSC-A")
+hist(fluorescence$SSC.A, breaks=50, col="grey", main="SSC-A", xlab="SSC-A")
+```
+
+
+Since the data is now a data.frame object, we can use the plot() function in base R to generate a scatter plot of FSC-A and SSC-A.
+```{r}
+mypar(1,1)
+plot(fluorescence$SSC.A, fluorescence$FSC.A, main="",xlab="SSC-A",ylab="FSC-A",pch=16,cex=0.4)
+```
+
+Note that here we can also adjust the axis range.
+```{r}
+plot(fluorescence$SSC.A, fluorescence$FSC.A, main="",xlab="SSC-A",ylab="FSC-A",pch=16,cex=0.4,
+     xlim=c(-1000,100000),ylim=c(-1000,300000))
+```
+
+Furthermore, working with a data.frame object also allows us to use the entire set of highly customisable graphical functions in ggplot2. For example, we could generate a ggplot scatter plot and overlay it with a density plot in 2 dimensions using the following command:
+
+```{r}
+ggplot(data = fluorescence, mapping = aes(x=FSC.A, y=SSC.A)) + 
+  geom_point(size=0.5, alpha=0.5) + geom_density_2d() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black")) 
+```
+
+Here I have first defined the x and y variables (inside the aes parameter), then I have specified that I want variables to be plotted by points of a specific size and transparency (alpha) and that I also want those same variables to be visualised as a density plot. Then I have modified other characetristics of the plot such as the background and line colours.
+
+In conclusion, cytometry data can be visualised using flowViz functions directly on a flowFrme or by extracting the quantitative data as a data frame and using R base functions.
+
+## Applying data transformations
+
+Often fluorescence measurements from cytometry data span a very large range of values, with multiple orders of magnitude. In these cases, visualising the raw values can be difficult, since data points tend to group together in a very dense, undistinguishable area. 
+
+For example, let's generate histograms for all channels (other than FCSs and SSCs) in our flowFrame:
+
+```{r}
+densityplot(~`CD127-FITC` + `CD25-PE` + `CD4-APC` + `CD45RA-BV785`, fcs)
+```
+
+Note that values range all the way from 0 to 2.5e5, but mostly cluster in the left side of the plot. To improve visualisation of this kind of data, we need to apply data transformations. Just as FlowJo, R libraries also support a variety of transformations. The most relevant ones are:
+
+1. Truncate transformation
+2. Scale transformation
+3. Linear transformation
+4. Quadratic transformation
+5. Log transformation (in any logarithmic base)
+6. Biexponential transformation
+7. Logicle transformation(a special type of biexponential with improved performance)
+8. Arcsinh (Hyperbolic arcsine) transformation
+
+For more information on the way specific transformations are calculated, please refer to section 3 of the following documentation:
+
+https://www.bioconductor.org/packages/3.7/bioc/vignettes/flowCore/inst/doc/HowTo-flowCore.pdf
+
+To transform cytometry data in R we first need to create a "transformtion function". Let's create a biexponential transformation with default parameters and ID "BiexpTransform". To do this, we simply define it via the biexponentialTransform() function. 
+
+```{r}
+trans.biexp <- biexponentialTransform(transformationId="BiexpTransform")
+```
+
+Next, we need to create a "transformation list" object. This means that we need to generate a list of transformations and the channels they will be applied to. In this case, let's apply the same biexponential trasformation we already defined to all channels except FSC and SSC. Thus, we use transformList() and specify the name of parameters we want to transform:
+
+```{r}
+trans <- transformList(c("CD127-FITC", "CD25-PE", "CD4-APC", "CD45RA-BV785"),trans.biexp)
+```
+
+Finally, we apply the transformation to the flowFrame and store the result as a new flowFrame object.
+
+```{r}
+fcs.biexp <- transform(fcs, trans)
+```
+
+Let's now visualise the same channel to see if biexponential transformation was an improvement.
+
+```{r}
+densityplot(~`CD127-FITC` + `CD25-PE` + `CD4-APC` + `CD45RA-BV785`, fcs.biexp)
+```
+
+Now the range has shrunk and it is easier to visualise the data. We can verify this using scatter plots.
+
+```{r}
+xyplot(`CD45RA-BV785`~`CD4-APC`, fcs.biexp,smooth=FALSE)
+```
+
+```{r}
+xyplot(`CD25-PE`~`CD127-FITC`, fcs.biexp,smooth=FALSE)
+```
+
+# Manual gating in R
+
+One of the most common operations performed on flow cytometry data is "gating", selecting a subgroup of data points based on the values of one or two channels. Cytometry libraries in R allow the user to do this manually (as one would do in FlowJo) by specifying the shape and limits of the gate. Some of the most important gate shapes supported by flowCore and their respective functions are the following:
+
+1. Rectangular gate = rectangleGate()
+2. Polygon gate = polygonGate()
+3. Polytope gate (A special type of polygon gate for more than 2 channels at a time) = polytopeGate() 
+4. Ellipsoidal gate = ellipsoidGate()
+
+Let's start with the easiest shape: the rectangle. We will create a rectangle gate which contains all the single events (singlets) in our data set. To do so, let's first visualy examine the data. We extract the biexponentially transformed fluorescence values and store them as a data frame.
+
+```{r}
+fluorescence.biexp <- data.frame(fcs.biexp@exprs)
+```
+
+Now we use ggplot to overlay a scatter plot and a 2-dimensional density plot (contour plot) of FSC-H and FSC-W.
+
+```{r, message=FALSE, warning=FALSE}
+ggplot(data = fluorescence.biexp, mapping = aes(x=FSC.H, y=FSC.W)) + xlim(0,300000) + ylim(50000,200000) +
+  geom_point(size=0.4, alpha=0.3) + geom_density_2d() + xlab("FSC-H") + ylab("FSC-W") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black")) 
+```
+
+Based on this picture, we determine the limits of our rectangle gate. The CD4+ population seems to have FSC-H values between 0 and 200,000 and FSC-W values between 60,000 and 70,000. This is of course an approximation. Let's add lines to the previous plot indicating the proposed limits of the gate. Blue represents lower limit and red upper limit.
+
+```{r, message=FALSE, warning=FALSE}
+ggplot(data = fluorescence.biexp, mapping = aes(x=FSC.H, y=FSC.W)) + xlim(0,300000) + ylim(50000,200000) +
+  geom_point(size=0.4, alpha=0.3) + geom_density_2d() + xlab("FSC-H") + ylab("FSC-W") +
+  geom_vline(xintercept = 0, color="blue") + geom_vline(xintercept = 200000, color="red") + 
+  geom_hline(yintercept = 60000, color="blue") + geom_hline(yintercept = 70000, color="red") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black")) 
+```
+
+The singlets seem indeed to be contained within these limits.
+
+Let's now define a rectangular gate using rectangleGate() and specifying its limits. We'll a "singlets" ID to the gate.
+
+```{r}
+singletsGate <- rectangleGate(filterId = "Singlets", "FSC-H"=c(0,200000), "FSC-W"=c(60000,70000))
+```
+
+Next, we use the Subset() function (note the capital S) to partition our flowFrame object. We store the results from this filtering step in a new variable called "singlets".
+
+```{r}
+singlets <- Subset(fcs.biexp,singletsGate)
+```
+
+Now let's extract the fluorescence values of this population as a data frame and use them to generate the exact same plot as before.
+
+```{r}
+fluorescence.singlets <- data.frame(singlets@exprs)
+```
+
+```{r, message=FALSE, warning=FALSE}
+ggplot(data = fluorescence.singlets, mapping = aes(x=FSC.H, y=FSC.W)) + xlim(0,300000) + ylim(50000,200000) +
+  geom_point(size=0.4, alpha=0.3) + geom_density_2d() + xlab("FSC-H") + ylab("FSC-W") +
+  geom_vline(xintercept = 0, color="blue") + geom_vline(xintercept = 200000, color="red") + 
+  geom_hline(yintercept = 60000, color="blue") + geom_hline(yintercept = 70000, color="red") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black")) 
+```
+
+
+All data points outside the rectangle have now disappeared: they were discarded by the filtering function.
